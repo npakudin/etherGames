@@ -10,12 +10,17 @@ describe("RockScissorsPaper contract", function () {
     INVALID: 4,
   }
   const InvalidGameNumber = 12345;
+  const TimeoutSeconds = 1000;
   const GameResult = {
     Draw: 0,
     Player1: 1,
     Player2: 2,
   }
 
+  async function moveTime(time) {
+    await network.provider.send("evm_increaseTime", [time])
+    await network.provider.send("evm_mine")
+  }
 
   async function deployFixture() {
     const RockScissorsPaper = await ethers.getContractFactory("RockScissorsPaper");
@@ -189,4 +194,46 @@ describe("RockScissorsPaper contract", function () {
 
     await expect(rspContract.connect(addr1).provideSecret1(InvalidGameNumber, Move.PAPER)).to.be.revertedWith("game is not created");
   });
+
+
+  it("Player2 loses if not provided move2 during 1000s", async function () {
+    const { rspContract, addr1, addr2 } = await loadFixture(deployFixture);
+    const { gameNumber, secret1 } = await makeMove1(rspContract, addr1, addr2, Move.ROCK);
+
+    moveTime(TimeoutSeconds);
+
+    expect(await rspContract.getWinner(gameNumber)).to.equal(GameResult.Player1);
+
+    // cannot make move2
+    await expect(rspContract.connect(addr2).makeMove2(gameNumber, Move.PAPER)).to.be.revertedWith("timeout exceed");    
+  });
+
+  it("Player1 loses if not provided provideSecret1 during 1000s", async function () {
+    const { rspContract, addr1, addr2 } = await loadFixture(deployFixture);
+    const { gameNumber, secret1 } = await makeMove1(rspContract, addr1, addr2, Move.ROCK);
+    await rspContract.connect(addr2).makeMove2(gameNumber, Move.SCISSORS);
+
+    moveTime(TimeoutSeconds);
+
+    expect(await rspContract.getWinner(gameNumber)).to.equal(GameResult.Player2);
+
+    // cannot make provideSecret1
+    await expect(rspContract.connect(addr1).provideSecret1(gameNumber, secret1)).to.be.revertedWith("timeout exceed");
+  });
+
+  it("should work OK for time 999s", async function () {
+    const { rspContract, addr1, addr2 } = await loadFixture(deployFixture);
+    const { gameNumber, secret1 } = await makeMove1(rspContract, addr1, addr2, Move.ROCK);
+
+    moveTime(TimeoutSeconds - 1);
+
+    await rspContract.connect(addr2).makeMove2(gameNumber, Move.PAPER);
+
+    moveTime(TimeoutSeconds - 1);
+
+    await rspContract.connect(addr1).provideSecret1(gameNumber, secret1);
+
+    expect(await rspContract.getWinner(gameNumber)).to.equal(GameResult.Player2);
+  });
+
 });

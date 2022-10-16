@@ -66,7 +66,7 @@ contract RockScissorsPaper {
         require(msg.sender == game.player1, "should be done by game creator");
         require(game.move2 != Move.NONE, "move2 is not done");
         require(game.secret1 == 0, "cannot redo");
-        require(isTimeoutOK(game));
+        require(isTimeoutOK(game), "timeout exceed");
 
         game.secret1 = secret1;
     }
@@ -121,7 +121,7 @@ contract RockScissorsPaper {
 
     function isTimeoutOK(Game memory game) public view returns (bool) {
         // timeout not exceed
-        return game.lastUpdated + TimeoutSeconds > block.timestamp;
+        return game.lastUpdated + TimeoutSeconds >= block.timestamp;
     }
 
     function myEncrypt(uint move, uint256 secret) public pure returns (uint) {
